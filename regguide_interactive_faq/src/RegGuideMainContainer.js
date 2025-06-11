@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 // Inline styles for light theme using the provided color palette
 const COLORS = {
@@ -153,6 +153,23 @@ function RegGuideMainContainer() {
   // Progress indicator
   const progress = Math.round((step) / QUESTIONS.length * 100);
 
+  // Animation state for guided Q/A
+  const qaRef = useRef(null);
+  const [qaKey, setQaKey] = useState(0);
+  // When step changes, update a key to force remount for animation
+  useEffect(() => { setQaKey(step * 100 + (showPanels ? 1000 : 0)); }, [step, showPanels]);
+
+  // Used to trigger slide/fade panel animation on summary
+  const summaryRef = useRef(null);
+  const [showSummary, setShowSummary] = useState(false);
+  useEffect(() => {
+    if (showPanels) {
+      setTimeout(() => setShowSummary(true), 70);
+    } else {
+      setShowSummary(false);
+    }
+  }, [showPanels]);
+
   return (
     <div
       style={{
@@ -178,7 +195,7 @@ function RegGuideMainContainer() {
           style={{
             width: `${showPanels ? 100 : progress}%`,
             height: '100%',
-            transition: 'width 0.5s',
+            transition: 'width 0.5s cubic-bezier(.27, .8, .36, 1.01)',
             background: COLORS.primary
           }}
         />
@@ -195,6 +212,9 @@ function RegGuideMainContainer() {
         { !showPanels ? (
           <>
             <div
+              ref={qaRef}
+              key={qaKey}
+              className="reg-fade-in"
               style={{
                 background: COLORS.background,
                 borderRadius: 16,
@@ -237,7 +257,8 @@ function RegGuideMainContainer() {
                       width: '100%',
                       border: 'none',
                       marginBottom: 10,
-                      boxShadow: '0 1px 4px rgba(20,30,60,0.06)'
+                      boxShadow: '0 1px 4px rgba(20,30,60,0.06)',
+                      transition: 'box-shadow 0.19s'
                     }}
                   >
                     {opt.label}
@@ -255,7 +276,9 @@ function RegGuideMainContainer() {
                       padding: '8px 20px',
                       border: 'none',
                       fontWeight: 400,
-                      fontSize: 14
+                      fontSize: 14,
+                      boxShadow: '0 1px 3px rgba(60,100,120,0.07)',
+                      transition: 'box-shadow 0.18s'
                     }}
                     onClick={() => setStep(step-1)}
                   >
@@ -269,13 +292,20 @@ function RegGuideMainContainer() {
           // Show FAQ, checklist, and issued docs
           <>
             <div
+              ref={summaryRef}
+              className={`reg-slide-in reg-panel-animate${showSummary ? ' open' : ' closed'}`}
               style={{
                 background: COLORS.background,
                 borderRadius: 16,
-                boxShadow: '0 2px 8px rgba(50,70,120,0.08)',
+                boxShadow: showSummary
+                  ? '0 2px 24px rgba(40,100,200,0.13)'
+                  : '0 2px 8px rgba(50,70,120,0.08)',
                 padding: 24,
                 marginBottom: 20,
-                border: `1px solid ${COLORS.border}`
+                border: `1px solid ${COLORS.border}`,
+                opacity: showSummary ? 1 : 0.95,
+                transform: showSummary ? 'scale(1.012)' : 'scale(.991)',
+                transition: 'all 0.32s cubic-bezier(.22,.8,.36,1.07)'
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: 10 }}>
@@ -351,19 +381,23 @@ function scenarioLabel(regType) {
 }
 
 function Panel({ title, open, setOpen, children, icon, color }) {
-  // Collapsible panel for sections (FAQ, Checklist...)
+  // Collapsible panel with smooth expand/collapse
+  const id = title.replace(/\W/g, '');
+  // For accessibility and SSR, always mount the content but animate visibility/height
   return (
-    <div style={{
-      borderRadius: 10,
-      background: '#fff',
-      margin: '18px 0',
-      border: `1.7px solid ${color}`,
-      boxShadow: open ? '0 1px 6px rgba(50,70,120,0.06)' : 'none',
-      transition: 'box-shadow 0.2s'
-    }}>
+    <div
+      className={`reg-panel-animate${open ? ' open' : ' closed'}`}
+      style={{
+        borderRadius: 10,
+        background: '#fff',
+        margin: '18px 0',
+        border: `1.7px solid ${color}`,
+        boxShadow: open ? '0 1.5px 12px rgba(50,70,120,0.10)' : 'none',
+        transition: 'box-shadow 0.22s, background 0.21s',
+      }}>
       <button
         aria-expanded={open}
-        aria-controls={title.replace(/\W/g,'')}
+        aria-controls={id}
         style={{
           width: '100%',
           padding: '13px 16px',
@@ -377,18 +411,30 @@ function Panel({ title, open, setOpen, children, icon, color }) {
           display: 'flex',
           alignItems: 'center',
           outline: 'none',
+          WebkitTapHighlightColor: 'transparent',
+          transition: 'background 0.14s'
         }}
         onClick={() => setOpen(v => !v)}
       >
         {icon} {title}
         <span style={{flex: 1}} />
-        <span aria-label={open ? 'Collapse' : 'Expand'} style={{fontSize: 18}}>
+        <span aria-label={open ? 'Collapse' : 'Expand'} style={{
+          fontSize: 18,
+          transform: open ? 'rotate(0deg)' : 'rotate(-90deg)',
+          transition: 'transform 0.27s'
+        }}>
           {open ? '▾' : '▸'}
         </span>
       </button>
-      {open && <div id={title.replace(/\W/g,'')} style={{padding: '8px 18px 12px 20px', background: COLORS.secondary}}>
+      <div
+        id={id}
+        className={`reg-collapse-content${open ? ' open' : ''}`}
+        style={{ padding: open ? '8px 18px 12px 20px' : '0 18px', background: COLORS.secondary, transition: 'padding 0.21s' }}
+        aria-hidden={!open}
+      >
+        {/* Always rendered for smooth transition */}
         {children}
-      </div>}
+      </div>
     </div>
   );
 }
